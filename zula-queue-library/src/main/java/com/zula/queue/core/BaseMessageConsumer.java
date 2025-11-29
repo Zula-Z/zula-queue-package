@@ -1,6 +1,5 @@
 package com.zula.queue.core;
 
-import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -32,30 +31,7 @@ public abstract class BaseMessageConsumer<T> {
         System.out.println("Zula: " + getClass().getSimpleName() + " listening on " + serviceName + "." + messageType);
     }
 
-    @RabbitListener(queues = "#{'${spring.application.name:unknown-service}' + '.' + @queueTargetProvider.getTargetQueue()}")
-    public void handleMessage(T message) {
-        System.out.println("Zula: " + getClass().getSimpleName() + " received " + messageType + " message");
-        processMessage(message);
-    }
-
     public abstract void processMessage(T message);
-
-    @org.springframework.context.annotation.Bean
-    public QueueTargetProvider queueTargetProvider() {
-        return new QueueTargetProvider(this.messageType);
-    }
-
-    public static class QueueTargetProvider {
-        private final String targetQueue;
-
-        public QueueTargetProvider(String targetQueue) {
-            this.targetQueue = targetQueue;
-        }
-
-        public String getTargetQueue() {
-            return targetQueue;
-        }
-    }
 
     @SuppressWarnings("unchecked")
     private String deriveMessageTypeFromGeneric() {
@@ -95,5 +71,13 @@ public abstract class BaseMessageConsumer<T> {
 
     public String getMessageType() {
         return messageType;
+    }
+
+    public String getServiceName() {
+        return serviceName;
+    }
+
+    public String getQueueName() {
+        return serviceName + "." + messageType;
     }
 }
