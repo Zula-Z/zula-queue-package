@@ -4,12 +4,13 @@ import com.zula.queue.core.QueueManager;
 import com.zula.queue.core.ZulaCommand;
 import com.zula.queue.core.ZulaMessage;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.env.Environment;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
-import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ClassUtils;
-import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 
 /**
  * Scans application base packages for classes annotated with @ZulaMessage and
@@ -21,18 +22,21 @@ public class MessageQueueInitializer {
 
     private final QueueManager queueManager;
     private final Environment environment;
+    private final BeanFactory beanFactory;
 
     public MessageQueueInitializer(QueueManager queueManager,
-                                   Environment environment) {
+                                   Environment environment,
+                                   BeanFactory beanFactory) {
         this.queueManager = queueManager;
         this.environment = environment;
+        this.beanFactory = beanFactory;
     }
 
     @PostConstruct
     public void initializeQueues() {
         java.util.List<String> basePackages = new java.util.ArrayList<>();
-        if (AutoConfigurationPackages.has(environment)) {
-            basePackages.addAll(AutoConfigurationPackages.get(environment));
+        if (AutoConfigurationPackages.has(beanFactory)) {
+            basePackages.addAll(AutoConfigurationPackages.get(beanFactory));
         }
         if (basePackages.isEmpty()) {
             return; // nothing to scan

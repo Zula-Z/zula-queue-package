@@ -62,8 +62,9 @@ public class QueueAutoConfig {
     @Bean
     @ConditionalOnMissingBean
     public MessageQueueInitializer messageQueueInitializer(QueueManager queueManager,
-                                                           org.springframework.core.env.Environment environment) {
-        return new MessageQueueInitializer(queueManager, environment);
+                                                           org.springframework.core.env.Environment environment,
+                                                           org.springframework.beans.factory.BeanFactory beanFactory) {
+        return new MessageQueueInitializer(queueManager, environment, beanFactory);
     }
 
     @Bean
