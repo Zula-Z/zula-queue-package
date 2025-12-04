@@ -41,14 +41,15 @@ public abstract class BaseMessageConsumer<T> {
 
     @PostConstruct
     public void init() {
+        String queueName = queueManager.generateQueueName(serviceName, messageType);
         queueManager.createServiceQueue(serviceName, messageType);
-        System.out.println("Zula: " + getClass().getSimpleName() + " listening on " + serviceName + "." + messageType);
+        System.out.println("Zula: " + getClass().getSimpleName() + " listening on " + queueName);
 
         // If a ConnectionFactory is available, create a listener container programmatically so
         // consuming services don't need to use @RabbitListener + SpEL on annotation attributes.
         if (connectionFactory != null) {
             SimpleMessageListenerContainer container = new SimpleMessageListenerContainer(connectionFactory);
-            container.setQueueNames(getQueueName());
+            container.setQueueNames(queueName);
             final ObjectMapper mapper = this.objectMapper != null ? this.objectMapper : new ObjectMapper();
 
             container.setMessageListener((Message message) -> {
@@ -143,6 +144,9 @@ public abstract class BaseMessageConsumer<T> {
     }
 
     public String getQueueName() {
+        if (queueManager != null) {
+            return queueManager.generateQueueName(serviceName, messageType);
+        }
         return serviceName + "." + messageType;
     }
 
