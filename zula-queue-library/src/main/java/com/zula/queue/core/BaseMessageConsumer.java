@@ -28,6 +28,9 @@ public abstract class BaseMessageConsumer<T> {
     @Autowired(required = false)
     private ObjectMapper objectMapper;
 
+    @Autowired(required = false)
+    private QueuePersistenceService queuePersistenceService;
+
     private final String messageType;
     private final Class<T> messageClass;
 
@@ -57,12 +60,16 @@ public abstract class BaseMessageConsumer<T> {
             container.setMessageListener((Message message) -> {
                 try {
                     byte[] body = message.getBody();
+                    String rawPayload = new String(body, StandardCharsets.UTF_8);
                     if (messageClass != null) {
                         T obj = mapper.readValue(body, messageClass);
+                        String messageId = MessageMetadataHelper.extractMessageId(message, obj);
+                        String sourceService = MessageMetadataHelper.extractSourceService(message);
+                        recordInbox(messageId, sourceService, rawPayload);
                         processMessage(obj);
+                        markInboxProcessed(messageId);
                     } else {
-                        String text = new String(body, StandardCharsets.UTF_8);
-                        System.out.println("Zula: Received message but cannot determine target class. Raw: " + text);
+                        System.out.println("Zula: Received message but cannot determine target class. Raw: " + rawPayload);
                     }
                 } catch (Exception ex) {
                     System.err.println("Zula: Error processing message in " + getClass().getSimpleName());
@@ -168,5 +175,27 @@ public abstract class BaseMessageConsumer<T> {
 
     public Class<T> getMessageClass() {
         return messageClass;
+    }
+
+    private void recordInbox(String messageId, String sourceService, String payload) {
+        if (queuePersistenceService == null) {
+            return;
+        }
+        try {
+            queuePersistenceService.recordInboxReceived(messageId, messageType, sourceService, payload);
+        } catch (Exception ex) {
+            System.out.println("Zula: Could not persist inbox message " + messageId + " - " + ex.getMessage());
+        }
+    }
+
+    private void markInboxProcessed(String messageId) {
+        if (queuePersistenceService == null) {
+            return;
+        }
+        try {
+            queuePersistenceService.markInboxProcessed(messageId);
+        } catch (Exception ex) {
+            System.out.println("Zula: Could not mark inbox message " + messageId + " as processed - " + ex.getMessage());
+        }
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
@@ -55,8 +56,9 @@ public class QueueAutoConfig {
     public com.zula.queue.core.MessageHandlerRegistry messageHandlerRegistry(QueueManager queueManager,
                                                                              org.springframework.amqp.rabbit.connection.ConnectionFactory connectionFactory,
                                                                              com.fasterxml.jackson.databind.ObjectMapper objectMapper,
-                                                                             org.springframework.core.env.Environment environment) {
-        return new com.zula.queue.core.MessageHandlerRegistry(queueManager, connectionFactory, objectMapper, environment);
+                                                                             org.springframework.core.env.Environment environment,
+                                                                             @org.springframework.beans.factory.annotation.Autowired(required = false) com.zula.queue.core.QueuePersistenceService queuePersistenceService) {
+        return new com.zula.queue.core.MessageHandlerRegistry(queueManager, connectionFactory, objectMapper, environment, queuePersistenceService);
     }
 
     @Bean
@@ -71,5 +73,15 @@ public class QueueAutoConfig {
     @ConditionalOnMissingBean
     public com.zula.queue.core.CommandHandlerRegistry commandHandlerRegistry(com.zula.queue.core.MessageHandlerRegistry messageHandlerRegistry) {
         return new com.zula.queue.core.CommandHandlerRegistry(messageHandlerRegistry);
+    }
+
+    @Bean
+    @ConditionalOnClass({org.jdbi.v3.core.Jdbi.class, com.zula.database.core.DatabaseManager.class})
+    @ConditionalOnBean({org.jdbi.v3.core.Jdbi.class, com.zula.database.core.DatabaseManager.class})
+    public com.zula.queue.core.QueuePersistenceService queuePersistenceService(org.jdbi.v3.core.Jdbi jdbi,
+                                                                               com.zula.database.core.DatabaseManager databaseManager,
+                                                                               com.fasterxml.jackson.databind.ObjectMapper objectMapper,
+                                                                               com.zula.database.config.DatabaseProperties databaseProperties) {
+        return new com.zula.queue.core.QueuePersistenceService(jdbi, databaseManager, objectMapper, databaseProperties);
     }
 }

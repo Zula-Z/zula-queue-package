@@ -3,12 +3,19 @@ package com.zula.queue.core;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 @Component
 public class MessagePublisher {
 
     private final RabbitTemplate rabbitTemplate;
     private final QueueManager queueManager;
+
+    @Autowired(required = false)
+    private QueuePersistenceService queuePersistenceService;
+
+    @Value("${spring.application.name:unknown-service}")
+    private String serviceName;
 
     @Autowired
     public MessagePublisher(QueueManager queueManager, RabbitTemplate rabbitTemplate) {
@@ -39,13 +46,20 @@ public class MessagePublisher {
     }
 
     public <T> void publishToService(String serviceName, String messageType, String action, T message) {
-        ensureRequestId(message);
+        String messageId = ensureRequestId(message);
         String exchange = queueManager.generateExchangeName(messageType);
         String routingKey = messageType.toLowerCase() + "." + action.toLowerCase();
 
         queueManager.createServiceQueue(serviceName, messageType);
 
-        rabbitTemplate.convertAndSend(exchange, routingKey, message);
+        persistOutbox(messageId, messageType, serviceName, message);
+
+        rabbitTemplate.convertAndSend(exchange, routingKey, message, msg -> {
+            msg.getMessageProperties().setHeader("x-source-service", this.serviceName);
+            msg.getMessageProperties().setHeader("x-message-id", messageId);
+            msg.getMessageProperties().setHeader("x-message-type", messageType);
+            return msg;
+        });
 
         System.out.println("Zula: Published " + messageType + " " + action + " to " + serviceName);
     }
@@ -67,7 +81,18 @@ public class MessagePublisher {
         return className.toLowerCase();
     }
 
-    private <T> void ensureRequestId(T message) {
+    private void persistOutbox(String messageId, String messageType, String targetService, Object message) {
+        if (queuePersistenceService == null) {
+            return;
+        }
+        try {
+            queuePersistenceService.persistOutbox(message, messageType, targetService, messageId);
+        } catch (Exception ex) {
+            System.out.println("Zula: Could not persist outbox message " + messageId + " - " + ex.getMessage());
+        }
+    }
+
+    private <T> String ensureRequestId(T message) {
         try {
             java.lang.reflect.Method getter = null;
             try {
@@ -76,7 +101,7 @@ public class MessagePublisher {
 
             Object current = getter != null ? getter.invoke(message) : null;
             if (current != null && current.toString().trim().length() > 0) {
-                return;
+                return current.toString();
             }
 
             String newId = java.util.UUID.randomUUID().toString();
@@ -84,16 +109,20 @@ public class MessagePublisher {
             try {
                 java.lang.reflect.Method setter = message.getClass().getMethod("setRequestId", String.class);
                 setter.invoke(message, newId);
-                return;
+                return newId;
             } catch (NoSuchMethodException ignored) { }
 
             try {
                 java.lang.reflect.Field field = message.getClass().getDeclaredField("requestId");
                 field.setAccessible(true);
                 field.set(message, newId);
+                return newId;
             } catch (NoSuchFieldException ignored) { }
+
+            return newId;
         } catch (Exception ex) {
             // best-effort; ignore errors
         }
+        return java.util.UUID.randomUUID().toString();
     }
 }

@@ -40,15 +40,18 @@ public class MessageHandlerRegistry {
     private final ConnectionFactory connectionFactory;
     private final ObjectMapper objectMapper;
     private final org.springframework.core.env.Environment environment;
+    private final QueuePersistenceService queuePersistenceService;
 
     public MessageHandlerRegistry(QueueManager queueManager,
                                   ConnectionFactory connectionFactory,
                                   ObjectMapper objectMapper,
-                                  org.springframework.core.env.Environment environment) {
+                                  org.springframework.core.env.Environment environment,
+                                  @org.springframework.beans.factory.annotation.Autowired(required = false) QueuePersistenceService queuePersistenceService) {
         this.queueManager = queueManager;
         this.connectionFactory = connectionFactory;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
         this.environment = environment;
+        this.queuePersistenceService = queuePersistenceService;
     }
 
     public <T> void register(Class<T> messageClass, Consumer<T> handler) {
@@ -74,8 +77,13 @@ public class MessageHandlerRegistry {
         container.setMessageListener((Message message) -> {
             try {
                 byte[] body = message.getBody();
+                String rawPayload = new String(body, StandardCharsets.UTF_8);
                 T obj = objectMapper.readValue(body, messageClass);
+                String messageId = MessageMetadataHelper.extractMessageId(message, obj);
+                String sourceService = MessageMetadataHelper.extractSourceService(message);
+                recordInbox(messageId, messageType, sourceService, rawPayload);
                 handler.accept(obj);
+                markInboxProcessed(messageId);
             } catch (Exception ex) {
                 System.err.println("Zula: Error processing message for " + queueName);
                 ex.printStackTrace();
@@ -116,5 +124,27 @@ public class MessageHandlerRegistry {
             return simpleName.substring(0, simpleName.length() - 7).toLowerCase();
         }
         return simpleName.toLowerCase();
+    }
+
+    private void recordInbox(String messageId, String messageType, String sourceService, String payload) {
+        if (queuePersistenceService == null) {
+            return;
+        }
+        try {
+            queuePersistenceService.recordInboxReceived(messageId, messageType, sourceService, payload);
+        } catch (Exception ex) {
+            System.out.println("Zula: Could not persist inbox message " + messageId + " - " + ex.getMessage());
+        }
+    }
+
+    private void markInboxProcessed(String messageId) {
+        if (queuePersistenceService == null) {
+            return;
+        }
+        try {
+            queuePersistenceService.markInboxProcessed(messageId);
+        } catch (Exception ex) {
+            System.out.println("Zula: Could not mark inbox message " + messageId + " as processed - " + ex.getMessage());
+        }
     }
 }
