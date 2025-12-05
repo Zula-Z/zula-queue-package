@@ -78,6 +78,14 @@
         </dependency>
     </dependencies>
 
+    <repositories>
+        <!-- Needed to resolve the database library hosted in GitHub Packages -->
+        <repository>
+            <id>zula-database-github</id>
+            <url>https://maven.pkg.github.com/Zula-Z/zula-database-package</url>
+        </repository>
+    </repositories>
+
     <build>
         <plugins>
             <plugin>
