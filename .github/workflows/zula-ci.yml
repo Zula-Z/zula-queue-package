@@ -38,7 +38,7 @@ jobs:
       - name: Configure Maven settings for GitHub Packages
         shell: bash
         run: |
-          REPO_OWNER=${GITHUB_REPOSITORY_OWNER:-${GITHUB_REPOSITORY%%/*}}
+          REPO_PATH=${GITHUB_REPOSITORY}
           cat > $GITHUB_WORKSPACE/settings.xml <<EOF
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
             <activeProfiles><activeProfile>github</activeProfile></activeProfiles>
@@ -49,7 +49,7 @@ jobs:
                   <repository>
                     <id>github</id>
                     <name>GitHub Packages</name>
-                    <url>https://maven.pkg.github.com/${REPO_OWNER}</url>
+                    <url>https://maven.pkg.github.com/${REPO_PATH}</url>
                     <snapshots><enabled>true</enabled></snapshots>
                   </repository>
                 </repositories>
@@ -59,14 +59,14 @@ jobs:
               <server>
                 <id>github</id>
                 <username>${GITHUB_ACTOR}</username>
-                <password>${GITHUB_TOKEN}</password>
+                <password>${{ secrets.PACKAGES_TOKEN != '' && secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}</password>
               </server>
             </servers>
           </settings>
           EOF
       - name: Build with Maven
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN != '' && secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: mvn -s $GITHUB_WORKSPACE/settings.xml -U clean package -DskipTests
       - name: Publish checks (placeholder)
         run: echo "Checks reported by GitHub automatically from job status."
