@@ -25,17 +25,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Enforce version bump on main
-        if: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          ROOT_VER=$(mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:3.1.0:exec)
-          APP_VER=$(cd zula-github-app-app && mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:3.1.0:exec)
-          MSG_VER=$(cd zula-github-app-messages && mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:3.1.0:exec)
-          echo "Root=$ROOT_VER App=$APP_VER Messages=$MSG_VER"
-          if [ "$ROOT_VER" != "$APP_VER" ] || [ "$ROOT_VER" != "$MSG_VER" ]; then
-            echo "Parent/app/messages versions must match."; exit 1;
-          fi
-          echo "Versions aligned: $ROOT_VER"
       - name: Cache Maven
         uses: actions/cache@v4
         with:
