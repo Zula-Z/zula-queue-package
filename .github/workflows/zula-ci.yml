@@ -72,7 +72,7 @@ jobs:
         run: echo "Checks reported by GitHub automatically from job status."
       - name: Notify webhook
         env:
-          WEBHOOK_URL: https://hooks.example.com/ci
+          WEBHOOK_URL: https://giktekdev.site/zula/backend/api/ci/notify
         run: |
           curl -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
