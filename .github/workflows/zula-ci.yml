@@ -59,15 +59,23 @@ jobs:
               <server>
                 <id>github</id>
                 <username>${GITHUB_ACTOR}</username>
-                <password>${{ secrets.PACKAGES_TOKEN != '' && secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}</password>
+                <password>${{ secrets.PACKAGES_TOKEN }}</password>
               </server>
             </servers>
           </settings>
           EOF
       - name: Build with Maven
         env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN != '' && secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
-        run: mvn -s $GITHUB_WORKSPACE/settings.xml -U clean package -DskipTests
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: mvn -s $GITHUB_WORKSPACE/settings.xml -U clean install -DskipTests
+      - name: Publish messages module (if present)
+        if: ${{ hashFiles('zula-github-app-messages/pom.xml') != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: |
+          TARGET_REPO=${MESSAGES_REPO_PATH:-$GITHUB_REPOSITORY}
+          mvn -s $GITHUB_WORKSPACE/settings.xml -pl zula-github-app-messages -am deploy -DskipTests \
+            -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${TARGET_REPO}
       - name: Publish checks (placeholder)
         run: echo "Checks reported by GitHub automatically from job status."
       - name: Notify webhook
