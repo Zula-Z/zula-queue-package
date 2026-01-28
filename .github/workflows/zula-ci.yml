@@ -59,14 +59,14 @@ jobs:
               <server>
                 <id>github</id>
                 <username>${GITHUB_ACTOR}</username>
-                <password>${{ secrets.PACKAGES_TOKEN }}</password>
+                <password>${{ secrets.PACKAGES_TOKEN != '' && secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}</password>
               </server>
             </servers>
           </settings>
           EOF
       - name: Build with Maven
         env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN != '' && secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: mvn -s $GITHUB_WORKSPACE/settings.xml -U clean install -DskipTests
       - name: Publish messages module (if present)
         if: ${{ hashFiles('zula-github-app-messages/pom.xml') != '' }}
