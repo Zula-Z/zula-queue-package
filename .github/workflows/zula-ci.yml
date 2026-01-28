@@ -66,10 +66,10 @@ jobs:
             </servers>
           </settings>
           EOF
-      - name: Build and deploy root (aggregator)
+      - name: Build root (no deploy)
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-        run: mvn -s $GITHUB_WORKSPACE/settings.xml -U clean deploy -DskipTests -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${GITHUB_REPOSITORY}
+        run: mvn -s $GITHUB_WORKSPACE/settings.xml -U clean install -DskipTests
       - name: Publish messages module (if present)
         if: ${{ hashFiles('zula-github-app-messages/pom.xml') != '' }}
         env:
