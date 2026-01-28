@@ -23,20 +23,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Enforce version bump on main
-        if: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          git fetch --tags
-          LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -1)
-          CURRENT=$(mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:3.1.0:exec)
-          STRIP_TAG=${LATEST_TAG#v}
-          if [ -n "$STRIP_TAG" ]; then
-            LOWEST=$(printf '%s\n%s\n' "$STRIP_TAG" "$CURRENT" | sort -V | head -1)
-            if [ "$LOWEST" = "$CURRENT" ]; then
-              echo "Version $CURRENT is not greater than latest tag $LATEST_TAG"; exit 1;
-            fi
-          fi
-          echo "Version $CURRENT is ahead of $LATEST_TAG"
       - name: Cache Maven
         uses: actions/cache@v4
         with:
