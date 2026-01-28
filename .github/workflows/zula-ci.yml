@@ -82,11 +82,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN != '' && secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: mvn -s $GITHUB_WORKSPACE/settings.xml -U clean package -DskipTests
-      - name: Publish messages module (if present)
-        if: ${{ hashFiles('zula-github-app-messages/pom.xml') != '' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN != '' && secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
-        run: mvn -s $GITHUB_WORKSPACE/settings.xml -pl zula-github-app-messages -am deploy -DskipTests
       - name: Publish checks (placeholder)
         run: echo "Checks reported by GitHub automatically from job status."
       - name: Notify webhook
