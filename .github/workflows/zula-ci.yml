@@ -74,7 +74,10 @@ jobs:
         if: ${{ hashFiles('zula-github-app-messages/pom.xml') != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-        run: mvn -s $GITHUB_WORKSPACE/settings.xml -pl zula-github-app-messages -am deploy -DskipTests
+        run: |
+          TARGET_REPO=${MESSAGES_REPO_PATH:-$GITHUB_REPOSITORY}
+          mvn -s $GITHUB_WORKSPACE/settings.xml -pl zula-github-app-messages -am deploy -DskipTests \
+            -DaltDeploymentRepository=github::https://maven.pkg.github.com/${TARGET_REPO}
       - name: Publish checks (placeholder)
         run: echo "Checks reported by GitHub automatically from job status."
       - name: Notify webhook
