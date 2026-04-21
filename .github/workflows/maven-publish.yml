@@ -13,15 +13,29 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Java for deployment to GitHub Packages
+
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Publish with Maven
+      - name: Configure Maven settings
         run: |
-          cd zula-queue-library
-          mvn -B clean deploy -DskipTests
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << 'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>github</id>
+                <username>${env.GITHUB_ACTOR}</username>
+                <password>${env.GITHUB_TOKEN}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+      - name: Publish with Maven
+        run: mvn -B clean deploy -DskipTests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
