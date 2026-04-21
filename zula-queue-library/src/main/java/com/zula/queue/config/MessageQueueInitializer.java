@@ -1,8 +1,13 @@
 package com.zula.queue.config;
 
 import com.zula.queue.core.QueueManager;
+import com.zula.queue.core.QueueRegistryService;
+import com.zula.queue.core.ZulaCommandRetry;
+import com.zula.queue.core.ZulaHandlerRetry;
 import com.zula.queue.core.ZulaCommand;
 import com.zula.queue.core.ZulaMessage;
+import com.zula.queue.core.DeadLetterConfig;
+import com.zula.queue.core.model.QueueMetadata;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
@@ -23,13 +28,19 @@ public class MessageQueueInitializer {
     private final QueueManager queueManager;
     private final Environment environment;
     private final BeanFactory beanFactory;
+    private final QueueProperties queueProperties;
+    private final QueueRegistryService registryService;
 
     public MessageQueueInitializer(QueueManager queueManager,
                                    Environment environment,
-                                   BeanFactory beanFactory) {
+                                   BeanFactory beanFactory,
+                                   QueueProperties queueProperties,
+                                   QueueRegistryService registryService) {
         this.queueManager = queueManager;
         this.environment = environment;
         this.beanFactory = beanFactory;
+        this.queueProperties = queueProperties;
+        this.registryService = registryService;
     }
 
     @PostConstruct
@@ -61,8 +72,11 @@ public class MessageQueueInitializer {
                         }
                         ZulaMessage messageAnnotation = clazz.getAnnotation(ZulaMessage.class);
                         ZulaCommand commandAnnotation = clazz.getAnnotation(ZulaCommand.class);
+                        ZulaCommandRetry retryAnnotation = clazz.getAnnotation(ZulaCommandRetry.class);
                         String messageType = deriveMessageType(clazz.getSimpleName(), messageAnnotation, commandAnnotation);
-                        queueManager.createServiceQueue(serviceName, messageType);
+                        DeadLetterConfig deadLetterConfig = DeadLetterConfig.from(retryAnnotation);
+                        queueManager.createServiceQueue(serviceName, messageType, deadLetterConfig);
+                        registerQueue(serviceName, messageType, deadLetterConfig);
                     } catch (Exception ex) {
                         System.out.println("Zula: Skipping message class " + className + " due to error: " + ex.getMessage());
                     }
@@ -83,5 +97,20 @@ public class MessageQueueInitializer {
             return className.substring(0, className.length() - "Message".length()).toLowerCase();
         }
         return className.toLowerCase();
+    }
+
+    private void registerQueue(String serviceName, String messageType, DeadLetterConfig deadLetterConfig) {
+        if (registryService == null) {
+            return;
+        }
+        QueueMetadata metadata = new QueueMetadata();
+        metadata.setServiceName(serviceName);
+        metadata.setQueueName(queueManager.generateQueueName(serviceName, messageType));
+        metadata.setMessageType(messageType);
+        metadata.setExchangeName(queueManager.generateExchangeName(messageType));
+        metadata.setHasDlq(deadLetterConfig.isEnabled());
+        metadata.setMaxRetries(deadLetterConfig.getMaxRetries());
+        metadata.setRetryDelayMs(deadLetterConfig.getRetryDelayMs());
+        registryService.registerQueue(metadata);
     }
 }

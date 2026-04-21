@@ -3,6 +3,8 @@ package com.zula.queue.core;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zula.queue.core.ZulaCommand;
 import com.zula.queue.core.ZulaMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
@@ -14,6 +16,8 @@ import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 
 public abstract class BaseMessageConsumer<T> {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(BaseMessageConsumer.class);
 
     @Autowired
     @Lazy
@@ -31,6 +35,9 @@ public abstract class BaseMessageConsumer<T> {
     @Autowired(required = false)
     private QueuePersistenceService queuePersistenceService;
 
+    @Autowired(required = false)
+    private DlqService dlqService;
+
     private final String messageType;
     private final Class<T> messageClass;
 
@@ -47,8 +54,13 @@ public abstract class BaseMessageConsumer<T> {
     @PostConstruct
     public void init() {
         String queueName = queueManager.generateQueueName(serviceName, messageType);
-        queueManager.createServiceQueue(serviceName, messageType);
-        System.out.println("Zula: " + getClass().getSimpleName() + " listening on " + queueName);
+        DeadLetterConfig deadLetterConfig = DeadLetterConfig.from(messageClass == null ? null : messageClass.getAnnotation(ZulaCommandRetry.class));
+        ZulaHandlerRetry override = getClass().getAnnotation(ZulaHandlerRetry.class);
+        deadLetterConfig = DeadLetterConfig.merge(deadLetterConfig, override);
+        final DeadLetterConfig effectiveDeadLetterConfig = deadLetterConfig;
+
+        queueManager.createServiceQueue(serviceName, messageType, effectiveDeadLetterConfig);
+        LOGGER.info("Zula: {} listening on {}", getClass().getSimpleName(), queueName);
 
         // If a ConnectionFactory is available, create a listener container programmatically so
         // consuming services don't need to use @RabbitListener + SpEL on annotation attributes.
@@ -66,21 +78,26 @@ public abstract class BaseMessageConsumer<T> {
                         String messageId = MessageMetadataHelper.extractMessageId(message, obj);
                         String sourceService = MessageMetadataHelper.extractSourceService(message);
                         recordInbox(messageId, sourceService, rawPayload);
-                        processMessage(obj);
-                        markInboxProcessed(messageId);
+                        try {
+                            processMessage(obj);
+                            markInboxProcessed(messageId);
+                        } catch (Exception handlerException) {
+                            if (dlqService != null) {
+                                dlqService.handleFailure(serviceName, messageType, effectiveDeadLetterConfig, message, obj, handlerException.getMessage());
+                            }
+                        }
                     } else {
-                        System.out.println("Zula: Received message but cannot determine target class. Raw: " + rawPayload);
+                        LOGGER.warn("Zula: Received message but cannot determine target class. Raw: {}", rawPayload);
                     }
                 } catch (Exception ex) {
-                    System.err.println("Zula: Error processing message in " + getClass().getSimpleName());
-                    ex.printStackTrace();
+                    LOGGER.error("Zula: Error processing message in {}", getClass().getSimpleName(), ex);
                 }
             });
 
             // start the container
             container.start();
         } else {
-            System.out.println("Zula: No ConnectionFactory available in context; consumer will not start a listener container. If you use @RabbitListener in the application, avoid SpEL on annotation attributes.");
+            LOGGER.warn("Zula: No ConnectionFactory available in context; consumer will not start a listener container.");
         }
     }
 
@@ -184,7 +201,7 @@ public abstract class BaseMessageConsumer<T> {
         try {
             queuePersistenceService.recordInboxReceived(messageId, messageType, sourceService, payload);
         } catch (Exception ex) {
-            System.out.println("Zula: Could not persist inbox message " + messageId + " - " + ex.getMessage());
+            LOGGER.warn("Zula: Could not persist inbox message {} - {}", messageId, ex.getMessage());
         }
     }
 
@@ -195,7 +212,7 @@ public abstract class BaseMessageConsumer<T> {
         try {
             queuePersistenceService.markInboxProcessed(messageId);
         } catch (Exception ex) {
-            System.out.println("Zula: Could not mark inbox message " + messageId + " as processed - " + ex.getMessage());
+            LOGGER.warn("Zula: Could not mark inbox message {} as processed - {}", messageId, ex.getMessage());
         }
     }
 }

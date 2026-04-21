@@ -10,6 +10,7 @@ public class QueueProperties {
     private boolean durableQueues = true;
     private boolean exclusiveQueues = false;
     private boolean autoDeleteQueues = false;
+    private boolean enableDlqController = true;
 
     public boolean isAutoCreateQueues() { return autoCreateQueues; }
     public void setAutoCreateQueues(boolean autoCreateQueues) { this.autoCreateQueues = autoCreateQueues; }
@@ -28,5 +29,8 @@ public class QueueProperties {
 
     public boolean isAutoDeleteQueues() { return autoDeleteQueues; }
     public void setAutoDeleteQueues(boolean autoDeleteQueues) { this.autoDeleteQueues = autoDeleteQueues; }
+
+    public boolean isEnableDlqController() { return enableDlqController; }
+    public void setEnableDlqController(boolean enableDlqController) { this.enableDlqController = enableDlqController; }
 
 }

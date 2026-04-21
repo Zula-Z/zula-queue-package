@@ -65,8 +65,10 @@ public class QueueAutoConfig {
     @ConditionalOnMissingBean
     public MessageQueueInitializer messageQueueInitializer(QueueManager queueManager,
                                                            org.springframework.core.env.Environment environment,
-                                                           org.springframework.beans.factory.BeanFactory beanFactory) {
-        return new MessageQueueInitializer(queueManager, environment, beanFactory);
+                                                           org.springframework.beans.factory.BeanFactory beanFactory,
+                                                           QueueProperties queueProperties,
+                                                           @org.springframework.beans.factory.annotation.Autowired(required = false) com.zula.queue.core.QueueRegistryService registryService) {
+        return new MessageQueueInitializer(queueManager, environment, beanFactory, queueProperties, registryService);
     }
 
     @Bean
@@ -83,5 +85,40 @@ public class QueueAutoConfig {
                                                                                com.fasterxml.jackson.databind.ObjectMapper objectMapper,
                                                                                com.zula.database.config.DatabaseProperties databaseProperties) {
         return new com.zula.queue.core.QueuePersistenceService(jdbi, databaseManager, objectMapper, databaseProperties);
+    }
+
+    @Bean
+    @ConditionalOnBean({org.jdbi.v3.core.Jdbi.class, com.zula.database.core.DatabaseManager.class})
+    public com.zula.queue.core.DlqPersistenceService dlqPersistenceService(org.jdbi.v3.core.Jdbi jdbi,
+                                                                           com.zula.database.core.DatabaseManager databaseManager,
+                                                                           com.fasterxml.jackson.databind.ObjectMapper objectMapper,
+                                                                           com.zula.database.config.DatabaseProperties databaseProperties) {
+        return new com.zula.queue.core.DlqPersistenceService(jdbi, databaseManager, objectMapper, databaseProperties);
+    }
+
+    @Bean
+    @ConditionalOnClass(RabbitTemplate.class)
+    public com.zula.queue.core.DlqService dlqService(QueueManager queueManager, RabbitTemplate rabbitTemplate) {
+        return new com.zula.queue.core.DlqService(queueManager, rabbitTemplate);
+    }
+
+    @Bean
+    @ConditionalOnBean({org.jdbi.v3.core.Jdbi.class, com.zula.database.core.DatabaseManager.class})
+    public com.zula.queue.core.QueueRegistryService queueRegistryService(org.jdbi.v3.core.Jdbi jdbi,
+                                                                         com.zula.database.core.DatabaseManager databaseManager) {
+        return new com.zula.queue.core.QueueRegistryService(jdbi, databaseManager);
+    }
+
+    @Bean
+    @ConditionalOnBean(com.zula.queue.core.DlqPersistenceService.class)
+    public com.zula.queue.config.DlqController dlqController(com.zula.queue.core.DlqPersistenceService dlqPersistenceService,
+                                                             com.zula.queue.core.DlqService dlqService) {
+        return new com.zula.queue.config.DlqController(dlqPersistenceService, dlqService);
+    }
+
+    @Bean
+    @ConditionalOnBean(com.zula.queue.core.QueueRegistryService.class)
+    public com.zula.queue.config.QueueRegistryController queueRegistryController(com.zula.queue.core.QueueRegistryService registryService) {
+        return new com.zula.queue.config.QueueRegistryController(registryService);
     }
 }

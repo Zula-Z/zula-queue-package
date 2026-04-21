@@ -2,6 +2,8 @@ package com.zula.queue.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zula.queue.core.ZulaCommand;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
@@ -36,11 +38,15 @@ import java.util.function.Consumer;
 @Component
 public class MessageHandlerRegistry {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(MessageHandlerRegistry.class);
+
     private final QueueManager queueManager;
     private final ConnectionFactory connectionFactory;
     private final ObjectMapper objectMapper;
     private final org.springframework.core.env.Environment environment;
     private final QueuePersistenceService queuePersistenceService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DlqService dlqService;
 
     public MessageHandlerRegistry(QueueManager queueManager,
                                   ConnectionFactory connectionFactory,
@@ -68,9 +74,10 @@ public class MessageHandlerRegistry {
 
         String serviceName = environment.getProperty("spring.application.name", "unknown-service");
         String queueName = queueManager.generateQueueName(serviceName, messageType);
+        DeadLetterConfig deadLetterConfig = DeadLetterConfig.from(messageClass.getAnnotation(ZulaCommandRetry.class));
 
-        queueManager.createServiceQueue(serviceName, messageType);
-        System.out.println("Zula: registering handler for " + queueName);
+        queueManager.createServiceQueue(serviceName, messageType, deadLetterConfig);
+        LOGGER.info("Zula: registering handler for {}", queueName);
 
         SimpleMessageListenerContainer container = new SimpleMessageListenerContainer(connectionFactory);
         container.setQueueNames(queueName);
@@ -82,13 +89,20 @@ public class MessageHandlerRegistry {
                 String messageId = MessageMetadataHelper.extractMessageId(message, obj);
                 String sourceService = MessageMetadataHelper.extractSourceService(message);
                 recordInbox(messageId, messageType, sourceService, rawPayload);
-                handler.accept(obj);
-                markInboxProcessed(messageId);
+                try {
+                    handler.accept(obj);
+                    markInboxProcessed(messageId);
+                } catch (Exception handlerException) {
+                    if (dlqService != null) {
+                        ZulaHandlerRetry override = handler.getClass().getAnnotation(ZulaHandlerRetry.class);
+                        dlqService.handleFailure(serviceName, messageType,
+                                DeadLetterConfig.merge(deadLetterConfig, override), message, obj, handlerException.getMessage());
+                    }
+                }
             } catch (Exception ex) {
-                System.err.println("Zula: Error processing message for " + queueName);
-                ex.printStackTrace();
+                LOGGER.error("Zula: Error processing message for {}", queueName, ex);
                 String raw = new String(message.getBody(), StandardCharsets.UTF_8);
-                System.err.println("Raw message: " + raw);
+                LOGGER.error("Raw message: {}", raw);
             }
         });
         container.start();
@@ -133,7 +147,7 @@ public class MessageHandlerRegistry {
         try {
             queuePersistenceService.recordInboxReceived(messageId, messageType, sourceService, payload);
         } catch (Exception ex) {
-            System.out.println("Zula: Could not persist inbox message " + messageId + " - " + ex.getMessage());
+            LOGGER.warn("Zula: Could not persist inbox message {} - {}", messageId, ex.getMessage());
         }
     }
 
@@ -144,7 +158,7 @@ public class MessageHandlerRegistry {
         try {
             queuePersistenceService.markInboxProcessed(messageId);
         } catch (Exception ex) {
-            System.out.println("Zula: Could not mark inbox message " + messageId + " as processed - " + ex.getMessage());
+            LOGGER.warn("Zula: Could not mark inbox message {} as processed - {}", messageId, ex.getMessage());
         }
     }
 }
