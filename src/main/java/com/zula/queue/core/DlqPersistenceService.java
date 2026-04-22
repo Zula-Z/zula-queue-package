@@ -35,7 +35,7 @@ public class DlqPersistenceService {
         jdbi.useHandle(handle -> {
             String dbProduct = detectDatabaseProduct(handle);
             boolean isMySQL = dbProduct.contains("mysql");
-            String autoIncrement = isMySQL ? "BIGINT AUTO_INCREMENT PRIMARY KEY" : "BIGSERIAL PRIMARY KEY";
+            String autoIncrement = autoIncrementPrimaryKey(dbProduct);
 
             handle.execute("CREATE TABLE IF NOT EXISTS " + queueSchema + ".message_dlq (" +
                     "message_id VARCHAR(100) PRIMARY KEY," +
@@ -88,6 +88,11 @@ public class DlqPersistenceService {
         } catch (Exception e) {
             return "postgresql";
         }
+    }
+
+    static String autoIncrementPrimaryKey(String databaseProductName) {
+        String normalized = databaseProductName == null ? "" : databaseProductName.toLowerCase();
+        return normalized.contains("mysql") ? "BIGINT AUTO_INCREMENT PRIMARY KEY" : "BIGSERIAL PRIMARY KEY";
     }
 
     public void record(

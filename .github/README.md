@@ -1,32 +1,33 @@
-# Zula Packages 🚀
+# Zula Queue Package
 
-Central package registry for the Zula microservices platform.
+Single RabbitMQ queue package for Zula microservices.
 
-## 📦 Available Packages
+## Available Package
 
-- **zula-queue-library**: Automated RabbitMQ queue management for microservices
+- `com.zula:zula-queue-package`
 
-## 🔧 Setup
+## Publishing
 
-### For Publishing
-1. Set GitHub token in Maven settings
-2. Run: `mvn clean deploy`
+```bash
+mvn clean deploy
+```
 
-### For Consumption
-Add to your `pom.xml`:
+## Consumption
+
 ```xml
 <repositories>
-    <repository>
-        <id>github</id>
-        <name>GitHub Packages</name>
-        <url>https://maven.pkg.github.com/YOUR_USERNAME/zula-packages</url>
-    </repository>
+  <repository>
+    <id>github</id>
+    <name>GitHub Packages</name>
+    <url>https://maven.pkg.github.com/Zula-Z/zula-queue-package</url>
+  </repository>
 </repositories>
 
 <dependencies>
-    <dependency>
-        <groupId>com.zula</groupId>
-        <artifactId>zula-queue-library</artifactId>
-        <version>1.0.0</version>
-    </dependency>
+  <dependency>
+    <groupId>com.zula</groupId>
+    <artifactId>zula-queue-package</artifactId>
+    <version>VERSION</version>
+  </dependency>
 </dependencies>
+```
