@@ -6,9 +6,12 @@ import com.zula.queue.core.ZulaCommandRetry;
 import com.zula.queue.core.ZulaHandlerRetry;
 import com.zula.queue.core.ZulaCommand;
 import com.zula.queue.core.ZulaMessage;
+import com.zula.queue.core.ZulaPublish;
 import com.zula.queue.core.DeadLetterConfig;
 import com.zula.queue.core.model.QueueMetadata;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -24,6 +27,8 @@ import org.springframework.util.ClassUtils;
  */
 @Component
 public class MessageQueueInitializer {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(MessageQueueInitializer.class);
 
     private final QueueManager queueManager;
     private final Environment environment;
@@ -45,15 +50,38 @@ public class MessageQueueInitializer {
 
     @PostConstruct
     public void initializeQueues() {
-        java.util.List<String> basePackages = new java.util.ArrayList<>();
+        java.util.Set<String> basePackages = new java.util.LinkedHashSet<>();
         if (AutoConfigurationPackages.has(beanFactory)) {
             basePackages.addAll(AutoConfigurationPackages.get(beanFactory));
         }
+        basePackages.addAll(queueProperties.getScanPackages());
+
+        java.util.Set<String> expandedPackages = new java.util.LinkedHashSet<>();
+        for (String packageName : basePackages) {
+            String current = packageName;
+            while (current != null && !current.isBlank()) {
+                expandedPackages.add(current);
+                int index = current.lastIndexOf('.');
+                if (index < 0) {
+                    break;
+                }
+                current = current.substring(0, index);
+            }
+        }
+        basePackages = expandedPackages;
+
         if (basePackages.isEmpty()) {
-            return; // nothing to scan
+            basePackages.add("com");
+            LOGGER.warn("Zula: No queue scan packages configured; falling back to scanning 'com'");
         }
 
-        String serviceName = environment.getProperty("spring.application.name", "unknown-service");
+        boolean scansCom = basePackages.stream().anyMatch(packageName -> packageName.equals("com") || packageName.startsWith("com."));
+        if (!scansCom) {
+            basePackages.add("com");
+            LOGGER.warn("Zula: Added fallback package 'com' to scan for @ZulaCommand/@ZulaMessage");
+        }
+
+        String currentServiceName = environment.getProperty("spring.application.name", "unknown-service");
 
         ClassPathScanningCandidateComponentProvider scanner =
                 new ClassPathScanningCandidateComponentProvider(false);
@@ -72,15 +100,28 @@ public class MessageQueueInitializer {
                         }
                         ZulaMessage messageAnnotation = clazz.getAnnotation(ZulaMessage.class);
                         ZulaCommand commandAnnotation = clazz.getAnnotation(ZulaCommand.class);
+                        ZulaPublish publishAnnotation = clazz.getAnnotation(ZulaPublish.class);
                         ZulaCommandRetry retryAnnotation = clazz.getAnnotation(ZulaCommandRetry.class);
                         String messageType = deriveMessageType(clazz.getSimpleName(), messageAnnotation, commandAnnotation);
+                        String targetService = deriveServiceName(publishAnnotation);
                         DeadLetterConfig deadLetterConfig = DeadLetterConfig.from(retryAnnotation);
-                        queueManager.createServiceQueue(serviceName, messageType, deadLetterConfig);
-                        registerQueue(serviceName, messageType, deadLetterConfig);
+                        queueManager.createServiceQueue(targetService, messageType, deadLetterConfig);
+                        registerQueue(currentServiceName, targetService, messageType, deadLetterConfig);
                     } catch (Exception ex) {
-                        System.out.println("Zula: Skipping message class " + className + " due to error: " + ex.getMessage());
+                        LOGGER.warn("Zula: Skipping message class {} due to error: {}", className, ex.getMessage());
                     }
                 }));
+    }
+
+    private String deriveServiceName(ZulaPublish publishAnnotation) {
+        String serviceName = environment.getProperty("spring.application.name", "");
+        if (serviceName != null && !serviceName.isBlank()) {
+            return serviceName.toLowerCase();
+        }
+        if (publishAnnotation != null && publishAnnotation.service() != null && !publishAnnotation.service().isBlank()) {
+            return publishAnnotation.service().toLowerCase();
+        }
+        return "unknown-service";
     }
 
     private String deriveMessageType(String className, ZulaMessage messageAnnotation, ZulaCommand commandAnnotation) {
@@ -99,13 +140,13 @@ public class MessageQueueInitializer {
         return className.toLowerCase();
     }
 
-    private void registerQueue(String serviceName, String messageType, DeadLetterConfig deadLetterConfig) {
+    private void registerQueue(String registeringServiceName, String queueServiceName, String messageType, DeadLetterConfig deadLetterConfig) {
         if (registryService == null) {
             return;
         }
         QueueMetadata metadata = new QueueMetadata();
-        metadata.setServiceName(serviceName);
-        metadata.setQueueName(queueManager.generateQueueName(serviceName, messageType));
+        metadata.setServiceName(registeringServiceName);
+        metadata.setQueueName(queueManager.generateQueueName(queueServiceName, messageType));
         metadata.setMessageType(messageType);
         metadata.setExchangeName(queueManager.generateExchangeName(messageType));
         metadata.setHasDlq(deadLetterConfig.isEnabled());
