@@ -44,7 +44,7 @@ public class QueuePersistenceService {
                                 String targetService,
                                 String messageId,
                                 MessageInitiator initiator) {
-        String payload = toPayload(message);
+        String payload = toPersistencePayload(message, initiator);
         LocalDateTime now = LocalDateTime.now();
 
         MessageOutbox outbox = new MessageOutbox();
@@ -53,7 +53,6 @@ public class QueuePersistenceService {
         outbox.setTargetService(targetService);
         outbox.setPayload(payload);
         outbox.setStatus(STATUS_SENT);
-        applyInitiator(outbox, initiator);
         outbox.setSentAt(now);
         outbox.setCreatedAt(now);
         outbox.setUpdatedAt(now);
@@ -74,9 +73,8 @@ public class QueuePersistenceService {
         inbox.setMessageId(messageId);
         inbox.setMessageType(messageType);
         inbox.setSourceService(StringUtils.hasText(sourceService) ? sourceService : "unknown-service");
-        inbox.setPayload(payload);
+        inbox.setPayload(toPersistencePayload(payload, initiator, true));
         inbox.setStatus(STATUS_RECEIVED);
-        applyInitiator(inbox, initiator);
         inbox.setCreatedAt(now);
         inbox.setUpdatedAt(now);
 
@@ -97,23 +95,25 @@ public class QueuePersistenceService {
         }
     }
 
-    private void applyInitiator(MessageOutbox outbox, MessageInitiator initiator) {
-        if (initiator == null) {
-            return;
-        }
-        outbox.setInitiatorType(initiator.getType());
-        outbox.setInitiatorId(initiator.getId());
-        outbox.setInitiatorName(initiator.getName());
-        outbox.setInitiatorPayload(toPayload(initiator));
+    private String toPersistencePayload(Object message, MessageInitiator initiator) {
+        return toPersistencePayload(toPayload(message), initiator, false);
     }
 
-    private void applyInitiator(MessageInbox inbox, MessageInitiator initiator) {
+    private String toPersistencePayload(String payload, MessageInitiator initiator, boolean rawPayload) {
         if (initiator == null) {
-            return;
+            return payload;
         }
-        inbox.setInitiatorType(initiator.getType());
-        inbox.setInitiatorId(initiator.getId());
-        inbox.setInitiatorName(initiator.getName());
-        inbox.setInitiatorPayload(toPayload(initiator));
+        java.util.Map<String, Object> envelope = new java.util.LinkedHashMap<>();
+        envelope.put("payload", rawPayload ? payload : safeRead(payload));
+        envelope.put("initiator", safeRead(toPayload(initiator)));
+        return toPayload(envelope);
+    }
+
+    private Object safeRead(String json) {
+        try {
+            return objectMapper.readValue(json, Object.class);
+        } catch (Exception ignored) {
+            return json;
+        }
     }
 }
