@@ -19,15 +19,37 @@ public class CommandPublisher {
         messagePublisher.publish(command);
     }
 
+    public <T> void sendCommand(T command, MessageInitiator initiator) {
+        messagePublisher.publish(command, initiator);
+    }
+
     public <T> void sendCommandToService(String serviceName, T command) {
         messagePublisher.publishToService(serviceName, command);
+    }
+
+    public <T> void sendCommandToService(String serviceName, T command, MessageInitiator initiator) {
+        messagePublisher.publishToService(serviceName, command, initiator);
     }
 
     public <T> void sendCommandToService(String serviceName, String action, T command) {
         messagePublisher.publishToService(serviceName, action, command);
     }
 
+    public <T> void sendCommandToService(String serviceName, String action, T command, MessageInitiator initiator) {
+        messagePublisher.publishToService(serviceName, action, command, initiator);
+    }
+
     public <T> void sendCommandToService(String serviceName, String commandType, String action, T command) {
         messagePublisher.publishToService(serviceName, commandType, action, command);
+    }
+
+    public <T> void sendCommandToService(
+            String serviceName,
+            String commandType,
+            String action,
+            T command,
+            MessageInitiator initiator
+    ) {
+        messagePublisher.publishToService(serviceName, commandType, action, command, initiator);
     }
 }

@@ -1,15 +1,17 @@
 package com.zula.queue.core;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 @Component
 public class MessagePublisher {
 
     private final RabbitTemplate rabbitTemplate;
     private final QueueManager queueManager;
+    private final ObjectMapper objectMapper;
 
     @Autowired(required = false)
     private QueuePersistenceService queuePersistenceService;
@@ -21,43 +23,61 @@ public class MessagePublisher {
     public MessagePublisher(QueueManager queueManager, RabbitTemplate rabbitTemplate) {
         this.queueManager = queueManager;
         this.rabbitTemplate = rabbitTemplate;
+        this.objectMapper = new ObjectMapper();
     }
 
     /**
      * Publish using defaults declared on the message class via @ZulaPublish.
      */
     public <T> void publish(T message) {
+        publish(message, null);
+    }
+
+    public <T> void publish(T message, MessageInitiator initiator) {
         ZulaPublish publish = message.getClass().getAnnotation(ZulaPublish.class);
         if (publish == null) {
             throw new IllegalArgumentException("Message class " + message.getClass().getName()
                     + " is missing @ZulaPublish(service=...) to infer destination");
         }
-        publishToService(publish.service(), deriveMessageType(message), publish.action(), message);
+        publishToService(publish.service(), deriveMessageType(message), publish.action(), message, initiator);
     }
 
     public <T> void publishToService(String serviceName, T message) {
+        publishToService(serviceName, message, null);
+    }
+
+    public <T> void publishToService(String serviceName, T message, MessageInitiator initiator) {
         String messageType = deriveMessageType(message);
-        publishToService(serviceName, messageType, "process", message);
+        publishToService(serviceName, messageType, "process", message, initiator);
     }
 
     public <T> void publishToService(String serviceName, String action, T message) {
+        publishToService(serviceName, action, message, null);
+    }
+
+    public <T> void publishToService(String serviceName, String action, T message, MessageInitiator initiator) {
         String messageType = deriveMessageType(message);
-        publishToService(serviceName, messageType, action, message);
+        publishToService(serviceName, messageType, action, message, initiator);
     }
 
     public <T> void publishToService(String serviceName, String messageType, String action, T message) {
+        publishToService(serviceName, messageType, action, message, null);
+    }
+
+    public <T> void publishToService(String serviceName, String messageType, String action, T message, MessageInitiator initiator) {
         String messageId = ensureRequestId(message);
         String exchange = queueManager.generateExchangeName(messageType);
         String routingKey = messageType.toLowerCase() + "." + action.toLowerCase();
 
         queueManager.createServiceQueue(serviceName, messageType);
 
-        persistOutbox(messageId, messageType, serviceName, message);
+        persistOutbox(messageId, messageType, serviceName, message, initiator);
 
         rabbitTemplate.convertAndSend(exchange, routingKey, message, msg -> {
             msg.getMessageProperties().setHeader("x-source-service", this.serviceName);
             msg.getMessageProperties().setHeader("x-message-id", messageId);
             msg.getMessageProperties().setHeader("x-message-type", messageType);
+            applyInitiatorHeaders(msg, initiator);
             return msg;
         });
 
@@ -81,14 +101,47 @@ public class MessagePublisher {
         return className.toLowerCase();
     }
 
-    private void persistOutbox(String messageId, String messageType, String targetService, Object message) {
+    private void persistOutbox(
+            String messageId,
+            String messageType,
+            String targetService,
+            Object message,
+            MessageInitiator initiator
+    ) {
         if (queuePersistenceService == null) {
             return;
         }
         try {
-            queuePersistenceService.persistOutbox(message, messageType, targetService, messageId);
+            queuePersistenceService.persistOutbox(message, messageType, targetService, messageId, initiator);
         } catch (Exception ex) {
             System.out.println("Zula: Could not persist outbox message " + messageId + " - " + ex.getMessage());
+        }
+    }
+
+    private void applyInitiatorHeaders(org.springframework.amqp.core.Message message, MessageInitiator initiator) {
+        if (initiator == null) {
+            return;
+        }
+        if (initiator.getType() != null) {
+            message.getMessageProperties().setHeader(MessageMetadataHelper.HEADER_INITIATOR_TYPE, initiator.getType());
+        }
+        if (initiator.getId() != null) {
+            message.getMessageProperties().setHeader(MessageMetadataHelper.HEADER_INITIATOR_ID, initiator.getId());
+        }
+        if (initiator.getName() != null) {
+            message.getMessageProperties().setHeader(MessageMetadataHelper.HEADER_INITIATOR_NAME, initiator.getName());
+        }
+        String payload = toJson(initiator);
+        if (payload != null) {
+            message.getMessageProperties().setHeader(MessageMetadataHelper.HEADER_INITIATOR_PAYLOAD, payload);
+        }
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 

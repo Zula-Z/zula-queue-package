@@ -77,7 +77,8 @@ public abstract class BaseMessageConsumer<T> {
                         T obj = mapper.readValue(body, messageClass);
                         String messageId = MessageMetadataHelper.extractMessageId(message, obj);
                         String sourceService = MessageMetadataHelper.extractSourceService(message);
-                        recordInbox(messageId, sourceService, rawPayload);
+                        MessageInitiator initiator = MessageMetadataHelper.extractInitiator(message, mapper);
+                        recordInbox(messageId, sourceService, rawPayload, initiator);
                         try {
                             processMessage(obj);
                             markInboxProcessed(messageId);
@@ -194,12 +195,12 @@ public abstract class BaseMessageConsumer<T> {
         return messageClass;
     }
 
-    private void recordInbox(String messageId, String sourceService, String payload) {
+    private void recordInbox(String messageId, String sourceService, String payload, MessageInitiator initiator) {
         if (queuePersistenceService == null) {
             return;
         }
         try {
-            queuePersistenceService.recordInboxReceived(messageId, messageType, sourceService, payload);
+            queuePersistenceService.recordInboxReceived(messageId, messageType, sourceService, payload, initiator);
         } catch (Exception ex) {
             LOGGER.warn("Zula: Could not persist inbox message {} - {}", messageId, ex.getMessage());
         }
