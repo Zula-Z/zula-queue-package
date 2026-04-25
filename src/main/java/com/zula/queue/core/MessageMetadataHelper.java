@@ -1,5 +1,6 @@
 package com.zula.queue.core;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.Message;
 
 import java.util.Map;
@@ -13,6 +14,10 @@ public final class MessageMetadataHelper {
     public static final String HEADER_MESSAGE_ID = "x-message-id";
     public static final String HEADER_SOURCE_SERVICE = "x-source-service";
     public static final String HEADER_MESSAGE_TYPE = "x-message-type";
+    public static final String HEADER_INITIATOR_TYPE = "x-initiator-type";
+    public static final String HEADER_INITIATOR_ID = "x-initiator-id";
+    public static final String HEADER_INITIATOR_NAME = "x-initiator-name";
+    public static final String HEADER_INITIATOR_PAYLOAD = "x-initiator-payload";
 
     private MessageMetadataHelper() {
     }
@@ -69,5 +74,43 @@ public final class MessageMetadataHelper {
             }
         } catch (Exception ignored) { }
         return null;
+    }
+
+    public static MessageInitiator extractInitiator(Message message, ObjectMapper objectMapper) {
+        if (message == null) {
+            return null;
+        }
+
+        Map<String, Object> headers = message.getMessageProperties().getHeaders();
+        Object payloadHeader = headers.get(HEADER_INITIATOR_PAYLOAD);
+        if (payloadHeader != null && objectMapper != null) {
+            try {
+                return objectMapper.readValue(payloadHeader.toString(), MessageInitiator.class);
+            } catch (Exception ignored) {
+            }
+        }
+
+        MessageInitiator initiator = new MessageInitiator();
+        boolean hasValue = false;
+
+        Object typeHeader = headers.get(HEADER_INITIATOR_TYPE);
+        if (typeHeader != null) {
+            initiator.setType(typeHeader.toString());
+            hasValue = true;
+        }
+
+        Object idHeader = headers.get(HEADER_INITIATOR_ID);
+        if (idHeader != null) {
+            initiator.setId(idHeader.toString());
+            hasValue = true;
+        }
+
+        Object nameHeader = headers.get(HEADER_INITIATOR_NAME);
+        if (nameHeader != null) {
+            initiator.setName(nameHeader.toString());
+            hasValue = true;
+        }
+
+        return hasValue ? initiator : null;
     }
 }

@@ -6,7 +6,7 @@
 
     <groupId>com.zula</groupId>
     <artifactId>zula-queue-package</artifactId>
-    <version>1.1.5</version>
+    <version>1.1.7</version>
     <packaging>jar</packaging>
 
     <name>Zula Queue Package</name>
@@ -16,7 +16,7 @@
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.3.5</spring-boot.version>
-        <zula.database.version>1.0.11</zula.database.version>
+        <zula.database.version>1.0.12</zula.database.version>
     </properties>
 
     <dependencyManagement>

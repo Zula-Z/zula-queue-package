@@ -42,7 +42,8 @@ public class QueuePersistenceService {
     public String persistOutbox(Object message,
                                 String messageType,
                                 String targetService,
-                                String messageId) {
+                                String messageId,
+                                MessageInitiator initiator) {
         String payload = toPayload(message);
         LocalDateTime now = LocalDateTime.now();
 
@@ -52,6 +53,7 @@ public class QueuePersistenceService {
         outbox.setTargetService(targetService);
         outbox.setPayload(payload);
         outbox.setStatus(STATUS_SENT);
+        applyInitiator(outbox, initiator);
         outbox.setSentAt(now);
         outbox.setCreatedAt(now);
         outbox.setUpdatedAt(now);
@@ -64,7 +66,8 @@ public class QueuePersistenceService {
     public void recordInboxReceived(String messageId,
                                     String messageType,
                                     String sourceService,
-                                    String payload) {
+                                    String payload,
+                                    MessageInitiator initiator) {
         LocalDateTime now = LocalDateTime.now();
 
         MessageInbox inbox = new MessageInbox();
@@ -73,6 +76,7 @@ public class QueuePersistenceService {
         inbox.setSourceService(StringUtils.hasText(sourceService) ? sourceService : "unknown-service");
         inbox.setPayload(payload);
         inbox.setStatus(STATUS_RECEIVED);
+        applyInitiator(inbox, initiator);
         inbox.setCreatedAt(now);
         inbox.setUpdatedAt(now);
 
@@ -91,5 +95,25 @@ public class QueuePersistenceService {
         } catch (Exception ignored) {
             return message != null ? message.toString() : "";
         }
+    }
+
+    private void applyInitiator(MessageOutbox outbox, MessageInitiator initiator) {
+        if (initiator == null) {
+            return;
+        }
+        outbox.setInitiatorType(initiator.getType());
+        outbox.setInitiatorId(initiator.getId());
+        outbox.setInitiatorName(initiator.getName());
+        outbox.setInitiatorPayload(toPayload(initiator));
+    }
+
+    private void applyInitiator(MessageInbox inbox, MessageInitiator initiator) {
+        if (initiator == null) {
+            return;
+        }
+        inbox.setInitiatorType(initiator.getType());
+        inbox.setInitiatorId(initiator.getId());
+        inbox.setInitiatorName(initiator.getName());
+        inbox.setInitiatorPayload(toPayload(initiator));
     }
 }

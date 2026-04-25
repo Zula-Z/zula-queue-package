@@ -3,8 +3,8 @@ package com.zula.queue.core;
 import org.springframework.stereotype.Component;
 
 /**
- * Command-first facade that mirrors the Standard Bank style "sendCommand" API
- * while delegating to {@link MessagePublisher} under the hood.
+ * Command-first facade exposing the "sendCommand" API while delegating to
+ * {@link MessagePublisher} under the hood.
  */
 @Component
 public class CommandPublisher {
@@ -19,15 +19,37 @@ public class CommandPublisher {
         messagePublisher.publish(command);
     }
 
+    public <T> void sendCommand(T command, MessageInitiator initiator) {
+        messagePublisher.publish(command, initiator);
+    }
+
     public <T> void sendCommandToService(String serviceName, T command) {
         messagePublisher.publishToService(serviceName, command);
+    }
+
+    public <T> void sendCommandToService(String serviceName, T command, MessageInitiator initiator) {
+        messagePublisher.publishToService(serviceName, command, initiator);
     }
 
     public <T> void sendCommandToService(String serviceName, String action, T command) {
         messagePublisher.publishToService(serviceName, action, command);
     }
 
+    public <T> void sendCommandToService(String serviceName, String action, T command, MessageInitiator initiator) {
+        messagePublisher.publishToService(serviceName, action, command, initiator);
+    }
+
     public <T> void sendCommandToService(String serviceName, String commandType, String action, T command) {
         messagePublisher.publishToService(serviceName, commandType, action, command);
+    }
+
+    public <T> void sendCommandToService(
+            String serviceName,
+            String commandType,
+            String action,
+            T command,
+            MessageInitiator initiator
+    ) {
+        messagePublisher.publishToService(serviceName, commandType, action, command, initiator);
     }
 }
