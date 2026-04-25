@@ -278,12 +278,12 @@ public class DlqPersistenceService {
         String base = " FROM " + queueSchema + ".message_dlq" + where;
         List<DlqRecord> rows = jdbi.withHandle(handle -> {
             var query = handle.createQuery("SELECT *" + base + " ORDER BY created_at DESC LIMIT :limit OFFSET :offset");
-            bindSearch(query, request);
+            bindSearch(query, request, true);
             return query.mapToBean(DlqRecord.class).list();
         });
         long total = jdbi.withHandle(handle -> {
             var query = handle.createQuery("SELECT COUNT(*)" + base);
-            bindSearch(query, request);
+            bindSearch(query, request, false);
             return query.mapTo(Long.class).one();
         });
 
@@ -306,7 +306,7 @@ public class DlqPersistenceService {
                 .list());
     }
 
-    private void bindSearch(org.jdbi.v3.core.statement.Query query, SearchRequest request) {
+    private void bindSearch(org.jdbi.v3.core.statement.Query query, SearchRequest request, boolean includePagination) {
         if (hasText(request.queueName)) {
             query.bind("queueName", "%" + request.queueName + "%");
         }
@@ -325,8 +325,10 @@ public class DlqPersistenceService {
         if (request.to != null) {
             query.bind("toTs", request.to);
         }
-        query.bind("limit", request.limit);
-        query.bind("offset", request.offset);
+        if (includePagination) {
+            query.bind("limit", request.limit);
+            query.bind("offset", request.offset);
+        }
     }
 
     private boolean hasText(String value) {
