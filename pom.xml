@@ -6,7 +6,7 @@
 
     <groupId>com.zula</groupId>
     <artifactId>zula-queue-package</artifactId>
-    <version>1.1.6</version>
+    <version>1.1.7</version>
     <packaging>jar</packaging>
 
     <name>Zula Queue Package</name>

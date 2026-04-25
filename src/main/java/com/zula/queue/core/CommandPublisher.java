@@ -3,8 +3,8 @@ package com.zula.queue.core;
 import org.springframework.stereotype.Component;
 
 /**
- * Command-first facade that mirrors the Standard Bank style "sendCommand" API
- * while delegating to {@link MessagePublisher} under the hood.
+ * Command-first facade exposing the "sendCommand" API while delegating to
+ * {@link MessagePublisher} under the hood.
  */
 @Component
 public class CommandPublisher {
